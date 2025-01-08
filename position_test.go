@@ -6,7 +6,7 @@ import (
 
 func TestPositionBinary(t *testing.T) {
 	for _, fen := range validFENs {
-		pos, err := decodeFEN(fen)
+		pos, err := decodeFEN(fen, false)
 		if err != nil {
 			t.Fatal(err)
 		}

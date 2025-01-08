@@ -123,7 +123,7 @@ const (
 // StartingPosition returns the starting position
 // rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 func StartingPosition() *Position {
-	pos, _ := decodeFEN(startFEN)
+	pos, _ := decodeFEN(startFEN, false)
 	return pos
 }
 
@@ -260,6 +260,9 @@ func (pos *Position) Hash() [16]byte {
 
 // MarshalText implements the encoding.TextMarshaler interface and
 // encodes the position's FEN.
+// TODO: upadate this to include if its 960 position. Currently using this on a 960
+// game (which has no more castle rights for both black and white) will lose information
+// that it is a 960 game and unmarshaling that text will produce a non 960 position
 func (pos *Position) MarshalText() (text []byte, err error) {
 	return []byte(pos.String()), nil
 }
@@ -267,9 +270,14 @@ func (pos *Position) MarshalText() (text []byte, err error) {
 // UnmarshalText implements the encoding.TextUnarshaler interface and
 // assumes the data is in the FEN format.
 func (pos *Position) UnmarshalText(text []byte) error {
-	cp, err := decodeFEN(string(text))
+	cp, err := decodeFEN(string(text), false)
 	if err != nil {
-		return err
+		cp9, err9 := decodeFEN(string(text), true)
+		if err9 != nil {
+			return fmt.Errorf("chess : position unmarshaltext error. Normal: %w . 960: %w", err, err9)
+		} else {
+			cp = cp9
+		}
 	}
 	pos.board = cp.board
 	pos.castleRights = cp.castleRights

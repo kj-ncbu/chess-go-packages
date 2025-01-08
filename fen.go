@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // Decodes FEN notation into a GameState.  An error is returned
 // if there is a parsing error or if the FEN is illegal. FEN
 // notation format: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
-func decodeFEN(fen string) (*Position, error) {
+// for 960 mode it can decode both shredder-fen and x-fen wuthout knowing
+// which one it is
+func decodeFEN(fen string, isNineSixty bool) (*Position, error) {
 	fen = strings.TrimSpace(fen)
 	parts := strings.Split(fen, " ")
 	if len(parts) != 6 {
@@ -23,7 +26,7 @@ func decodeFEN(fen string) (*Position, error) {
 	if !ok {
 		return nil, fmt.Errorf("chess: fen invalid turn %s", parts[1])
 	}
-	rights, err := formCastleRights(parts[2])
+	rights, err := formCastleRights(parts[2], isNineSixty, b)
 	if err != nil {
 		return nil, err
 	}
@@ -110,22 +113,242 @@ func fenFormRank(rankStr string) (map[File]Piece, error) {
 	return m, nil
 }
 
-func formCastleRights(castleStr string) (CastleRights, error) {
-	// check for duplicates aka. KKkq right now is valid
-	for _, s := range []string{"K", "Q", "k", "q", "-"} {
-		if strings.Count(castleStr, s) > 1 {
-			return "-", fmt.Errorf("chess: fen invalid castle rights %s", castleStr)
+func formCastleRights(castleStr string, isNineSixty bool, board *Board) (*CastleRights, error) {
+	cr := &CastleRights{
+		nineSixtyMode:         isNineSixty,
+		aSideRookStartingFile: "",
+		hSideRookStartingFile: "",
+		whiteKingSideCastle:   false,
+		whiteQueenSideCastle:  false,
+		blackKingSideCastle:   false,
+		blackQueenSideCastle:  false,
+	}
+	if castleStr == "-" {
+		return cr, nil
+	}
+	if len(castleStr) < 1 || len(castleStr) > 4 {
+		return cr, fmt.Errorf("chess: fen invalid castle rights %s , length should be 1 to 4", castleStr)
+	}
+	if hasDuplicateCharacters(castleStr) {
+		return cr, fmt.Errorf("chess: fen invalid castle rights %s, has duplicate characters", castleStr)
+	}
+	if !isNineSixty { // normal mode
+		if !hasOnlyKQkq(castleStr) {
+			return cr, fmt.Errorf("chess: fen invalid castle rights %s , normal mode should only have KQkq", castleStr)
+		}
+		if strings.ContainsRune(castleStr, 'K') {
+			if board.Piece(E1) != WhiteKing || board.Piece(H1) != WhiteRook {
+				return cr, fmt.Errorf("chess: fen illegal castle rights %s , normal white kingside missing pieces", castleStr)
+			}
+			cr.whiteKingSideCastle = true
+		}
+		if strings.ContainsRune(castleStr, 'Q') {
+			if board.Piece(E1) != WhiteKing || board.Piece(A1) != WhiteRook {
+				return cr, fmt.Errorf("chess: fen illegal castle rights %s, normal white queenside missing pieces", castleStr)
+			}
+			cr.whiteQueenSideCastle = true
+		}
+		if strings.ContainsRune(castleStr, 'k') {
+			if board.Piece(E8) != BlackKing || board.Piece(H8) != BlackRook {
+				return cr, fmt.Errorf("chess: fen illegal castle rights %s , normal black kingsie missing pieces", castleStr)
+			}
+			cr.blackKingSideCastle = true
+		}
+		if strings.ContainsRune(castleStr, 'q') {
+			if board.Piece(E8) != BlackKing || board.Piece(A8) != BlackRook {
+				return cr, fmt.Errorf("chess: fen illegal castle rights %s , normal black queenside missing pieces", castleStr)
+			}
+			cr.blackQueenSideCastle = true
+		}
+		return cr, nil
+	} else { // 960 mode, handles both Shredder-FEN and X-FEN
+		kingStartingFile := ""
+		for _, c := range castleStr {
+			if unicode.IsUpper(c) { // white castle
+				if board.whiteKingSq.Rank() != Rank1 {
+					return cr, fmt.Errorf("chess: fen illegal castle rights %s , white king should be on rank 1 for castle", castleStr)
+				}
+				if board.whiteKingSq.File() == FileA || board.whiteKingSq.File() == FileH {
+					return cr, fmt.Errorf("chess: fen illegal castle rights %s , white king cant be on file A or H for castle in 960", castleStr)
+				}
+				if kingStartingFile != "" && kingStartingFile != board.whiteKingSq.File().String() {
+					return cr, fmt.Errorf("chess: fen illegal castle rights %s , white and black kings must be on same file for both to have castle rights", castleStr)
+				}
+				kingStartingFile = board.whiteKingSq.File().String()
+				if c == 'K' {
+					if cr.whiteKingSideCastle {
+						return cr, fmt.Errorf("chess: fen invalid castle rights %s , white king side castle info provided more than once", castleStr)
+					}
+					for sq := H1; sq > board.whiteKingSq; sq-- {
+						if board.Piece(sq) == WhiteRook {
+							if cr.hSideRookStartingFile != "" && cr.hSideRookStartingFile != sq.File().String() {
+								return cr, fmt.Errorf("chess: fen invalid castle rights %s , rook starting king side file missmatch", castleStr)
+							}
+							cr.hSideRookStartingFile = sq.File().String()
+							cr.whiteKingSideCastle = true
+							break
+						}
+					}
+					if !cr.whiteKingSideCastle {
+						return cr, fmt.Errorf("chess: fen invalid castle rights %s , no white kingside rook found", castleStr)
+					}
+				} else if c == 'Q' {
+					if cr.whiteQueenSideCastle {
+						return cr, fmt.Errorf("chess: fen invalid castle rights %s , white queen side castle info provided more than once", castleStr)
+					}
+					for sq := A1; sq < board.whiteKingSq; sq++ {
+						if board.Piece(sq) == WhiteRook {
+							if cr.aSideRookStartingFile != "" && cr.aSideRookStartingFile != sq.File().String() {
+								return cr, fmt.Errorf("chess: fen invalid castle rights %s , rook starting queen side file missmatch", castleStr)
+							}
+							cr.aSideRookStartingFile = sq.File().String()
+							cr.whiteQueenSideCastle = true
+							break
+						}
+					}
+					if !cr.whiteQueenSideCastle {
+						return cr, fmt.Errorf("chess: fen invalid castle rights %s , no white queenside rook found", castleStr)
+					}
+				} else if c >= 'A' && c <= 'H' {
+					if runeToFileMap[c] > board.whiteKingSq.File() { // king side
+						if cr.whiteKingSideCastle {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , white king side castle info provided more than once", castleStr)
+						}
+						if board.Piece(NewSquare(runeToFileMap[c], Rank1)) != WhiteRook {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , no white kingside rook found", castleStr)
+						}
+						if cr.hSideRookStartingFile != "" && cr.hSideRookStartingFile != runeToFileMap[c].String() {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , rook starting king side file missmatch", castleStr)
+						}
+						cr.hSideRookStartingFile = runeToFileMap[c].String()
+						cr.whiteKingSideCastle = true
+					} else if runeToFileMap[c] < board.whiteKingSq.File() { // queen side
+						if cr.whiteQueenSideCastle {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , white queen side castle info provided more than once", castleStr)
+						}
+						if board.Piece(NewSquare(runeToFileMap[c], Rank1)) != WhiteRook {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , no white queenside rook found", castleStr)
+						}
+						if cr.aSideRookStartingFile != "" && cr.aSideRookStartingFile != runeToFileMap[c].String() {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , rook starting queen side file missmatch", castleStr)
+						}
+						cr.aSideRookStartingFile = runeToFileMap[c].String()
+						cr.whiteQueenSideCastle = true
+					} else {
+						return cr, fmt.Errorf("chess: fen illegal castle rights %s , rook can't be on king", castleStr)
+					}
+				} else {
+					return cr, fmt.Errorf("chess: fen invalid castle rights %s , unknown characters", castleStr)
+				}
+			} else if unicode.IsLower(c) { // black castle
+				if board.blackKingSq.Rank() != Rank8 {
+					return cr, fmt.Errorf("chess: fen illegal castle rights %s , black king should be on rank 8 for castle", castleStr)
+				}
+				if board.blackKingSq.File() == FileA || board.blackKingSq.File() == FileH {
+					return cr, fmt.Errorf("chess: fen illegal castle rights %s , black king cant be on file A or H for castle in 960", castleStr)
+				}
+				if kingStartingFile != "" && kingStartingFile != board.blackKingSq.File().String() {
+					return cr, fmt.Errorf("chess: fen illegal castle rights %s , white and black kings must be on same file for both to have castle rights", castleStr)
+				}
+				kingStartingFile = board.blackKingSq.File().String()
+				if c == 'k' {
+					if cr.blackKingSideCastle {
+						return cr, fmt.Errorf("chess: fen invalid castle rights %s , black king side castle info provided more than once", castleStr)
+					}
+					for sq := H8; sq > board.blackKingSq; sq-- {
+						if board.Piece(sq) == BlackRook {
+							if cr.hSideRookStartingFile != "" && cr.hSideRookStartingFile != sq.File().String() {
+								return cr, fmt.Errorf("chess: fen invalid castle rights %s , rook starting king side file missmatch", castleStr)
+							}
+							cr.hSideRookStartingFile = sq.File().String()
+							cr.blackKingSideCastle = true
+							break
+						}
+					}
+					if !cr.blackKingSideCastle {
+						return cr, fmt.Errorf("chess: fen invalid castle rights %s , no black kingside rook found", castleStr)
+					}
+				} else if c == 'q' {
+					if cr.blackQueenSideCastle {
+						return cr, fmt.Errorf("chess: fen invalid castle rights %s , black queen side castle info provided more than once", castleStr)
+					}
+					for sq := A8; sq < board.blackKingSq; sq++ {
+						if board.Piece(sq) == BlackRook {
+							if cr.aSideRookStartingFile != "" && cr.aSideRookStartingFile != sq.File().String() {
+								return cr, fmt.Errorf("chess: fen invalid castle rights %s , rook starting queen side file missmatch", castleStr)
+							}
+							cr.aSideRookStartingFile = sq.File().String()
+							cr.blackQueenSideCastle = true
+							break
+						}
+					}
+					if !cr.blackQueenSideCastle {
+						return cr, fmt.Errorf("chess: fen invalid castle rights %s , no black queenside rook found", castleStr)
+					}
+				} else if c >= 'a' && c <= 'h' {
+					if runeToFileMap[c] > board.blackKingSq.File() { // king side
+						if cr.blackKingSideCastle {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , black king side castle info provided more than once", castleStr)
+						}
+						if board.Piece(NewSquare(runeToFileMap[c], Rank8)) != BlackRook {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , no black kingside rook found", castleStr)
+						}
+						if cr.hSideRookStartingFile != "" && cr.hSideRookStartingFile != runeToFileMap[c].String() {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , rook starting king side file missmatch", castleStr)
+						}
+						cr.hSideRookStartingFile = runeToFileMap[c].String()
+						cr.blackKingSideCastle = true
+					} else if runeToFileMap[c] < board.blackKingSq.File() { // queen side
+						if cr.blackQueenSideCastle {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , black queen side castle info provided more than once", castleStr)
+						}
+						if board.Piece(NewSquare(runeToFileMap[c], Rank8)) != BlackRook {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , no black queenside rook found", castleStr)
+						}
+						if cr.aSideRookStartingFile != "" && cr.aSideRookStartingFile != runeToFileMap[c].String() {
+							return cr, fmt.Errorf("chess: fen invalid castle rights %s , rook starting queen side file missmatch", castleStr)
+						}
+						cr.aSideRookStartingFile = runeToFileMap[c].String()
+						cr.blackQueenSideCastle = true
+					} else {
+						return cr, fmt.Errorf("chess: fen illegal castle rights %s , rook can't be on king", castleStr)
+					}
+				} else {
+					return cr, fmt.Errorf("chess: fen invalid castle rights %s , unknown character", castleStr)
+				}
+			} else {
+				return cr, fmt.Errorf("chess: fen invalid castle rights %s , unknown character, niether lowercase nor uppercase", castleStr)
+			}
+		}
+		return cr, nil
+	}
+}
+
+func hasDuplicateCharacters(s string) bool {
+	charMap := make(map[rune]bool)
+	for _, char := range s {
+		if charMap[char] {
+			return true // Duplicate found
+		}
+		charMap[char] = true
+	}
+	return false
+}
+func hasOnlyKQkq(s string) bool {
+	for _, char := range s {
+		if !strings.ContainsRune("KQkq", char) {
+			return false
 		}
 	}
-	for _, r := range castleStr {
-		c := fmt.Sprintf("%c", r)
-		switch c {
-		case "K", "Q", "k", "q", "-":
-		default:
-			return "-", fmt.Errorf("chess: fen invalid castle rights %s", castleStr)
+	return true
+}
+func hasSomeKQkq(s string) bool {
+	for _, char := range s {
+		if strings.ContainsRune("KQkq", char) {
+			return true
 		}
 	}
-	return CastleRights(castleStr), nil
+	return false
 }
 
 func formEnPassant(enPassant string, board *Board, turn Color) (Square, error) {

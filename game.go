@@ -100,8 +100,10 @@ func PGN(r io.Reader) (func(*Game), error) {
 // prior moves, the move list will be empty.  The returned
 // function is designed to be used in the NewGame constructor.
 // An error is returned if there is a problem parsing the FEN data.
-func FEN(fen string) (func(*Game), error) {
-	pos, err := decodeFEN(fen)
+// for 960 mode it can decode both shredder-fen and x-fen wuthout knowing
+// which one it is
+func FEN(fen string, isNineSixty bool) (func(*Game), error) {
+	pos, err := decodeFEN(fen, isNineSixty)
 	if err != nil {
 		return nil, err
 	}
@@ -225,6 +227,7 @@ func (g *Game) Method() Method {
 }
 
 // FEN returns the FEN notation of the current position.
+// For 960 it returns Shredder-FEN
 func (g *Game) FEN() string {
 	return g.pos.String()
 }

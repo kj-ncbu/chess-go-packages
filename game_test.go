@@ -8,7 +8,7 @@ import (
 
 func TestCheckmate(t *testing.T) {
 	fenStr := "rn1qkbnr/pbpp1ppp/1p6/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1"
-	fen, err := FEN(fenStr)
+	fen, err := FEN(fenStr, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestCheckmate(t *testing.T) {
 
 	// Checkmate on castle
 	fenStr = "Q7/5Qp1/3k2N1/7p/8/4B3/PP3PPP/R3K2R w KQ - 0 31"
-	fen, err = FEN(fenStr)
+	fen, err = FEN(fenStr, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestCheckmate(t *testing.T) {
 
 func TestCheckmateFromFen(t *testing.T) {
 	fenStr := "rn1qkbnr/pbpp1Qpp/1p6/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 1"
-	fen, err := FEN(fenStr)
+	fen, err := FEN(fenStr, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestCheckmateFromFen(t *testing.T) {
 
 func TestStalemate(t *testing.T) {
 	fenStr := "k1K5/8/8/8/8/8/8/1Q6 w - - 0 1"
-	fen, err := FEN(fenStr)
+	fen, err := FEN(fenStr, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestStalemate(t *testing.T) {
 // position shouldn't result in stalemate because pawn can move http://en.lichess.org/Pc6mJDZN#138
 func TestInvalidStalemate(t *testing.T) {
 	fenStr := "8/3P4/8/8/8/7k/7p/7K w - - 2 70"
-	fen, err := FEN(fenStr)
+	fen, err := FEN(fenStr, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestFiveFoldRepetition(t *testing.T) {
 }
 
 func TestFiftyMoveRule(t *testing.T) {
-	fen, _ := FEN("2r3k1/1q1nbppp/r3p3/3pP3/pPpP4/P1Q2N2/2RN1PPP/2R4K b - b3 100 60")
+	fen, _ := FEN("2r3k1/1q1nbppp/r3p3/3pP3/pPpP4/P1Q2N2/2RN1PPP/2R4K b - b3 100 60", false)
 	g := NewGame(fen)
 	if err := g.Draw(FiftyMoveRule); err != nil {
 		t.Fatal(err)
@@ -152,7 +152,7 @@ func TestFiftyMoveRule(t *testing.T) {
 }
 
 func TestInvalidFiftyMoveRule(t *testing.T) {
-	fen, _ := FEN("2r3k1/1q1nbppp/r3p3/3pP3/pPpP4/P1Q2N2/2RN1PPP/2R4K b - b3 99 60")
+	fen, _ := FEN("2r3k1/1q1nbppp/r3p3/3pP3/pPpP4/P1Q2N2/2RN1PPP/2R4K b - b3 99 60", false)
 	g := NewGame(fen)
 	if err := g.Draw(FiftyMoveRule); err == nil {
 		t.Fatal("should require fifty moves")
@@ -160,7 +160,7 @@ func TestInvalidFiftyMoveRule(t *testing.T) {
 }
 
 func TestSeventyFiveMoveRule(t *testing.T) {
-	fen, _ := FEN("2r3k1/1q1nbppp/r3p3/3pP3/pPpP4/P1Q2N2/2RN1PPP/2R4K b - b3 149 80")
+	fen, _ := FEN("2r3k1/1q1nbppp/r3p3/3pP3/pPpP4/P1Q2N2/2RN1PPP/2R4K b - b3 149 80", false)
 	g := NewGame(fen)
 	if err := g.MoveStr("Kf8"); err != nil {
 		t.Fatal(err)
@@ -179,7 +179,7 @@ func TestInsufficientMaterial(t *testing.T) {
 		"4b3/2k5/2b5/8/8/3K1B2/8/8 w - - 1 1",
 	}
 	for _, f := range fens {
-		fen, err := FEN(f)
+		fen, err := FEN(f, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -201,7 +201,7 @@ func TestSufficientMaterial(t *testing.T) {
 		"8/2k5/8/8/8/3KR3/8/8 w - - 1 1",
 	}
 	for _, f := range fens {
-		fen, err := FEN(f)
+		fen, err := FEN(f, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -293,7 +293,7 @@ func TestMoveHistoryProgrammatic(t *testing.T) {
 
 func BenchmarkStalemateStatus(b *testing.B) {
 	fenStr := "k1K5/8/8/8/8/8/8/1Q6 w - - 0 1"
-	fen, err := FEN(fenStr)
+	fen, err := FEN(fenStr, false)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -309,7 +309,7 @@ func BenchmarkStalemateStatus(b *testing.B) {
 
 func BenchmarkInvalidStalemateStatus(b *testing.B) {
 	fenStr := "8/3P4/8/8/8/7k/7p/7K w - - 2 70"
-	fen, err := FEN(fenStr)
+	fen, err := FEN(fenStr, false)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func BenchmarkInvalidStalemateStatus(b *testing.B) {
 
 func BenchmarkPositionHash(b *testing.B) {
 	fenStr := "8/3P4/8/8/8/7k/7p/7K w - - 2 70"
-	fen, err := FEN(fenStr)
+	fen, err := FEN(fenStr, false)
 	if err != nil {
 		b.Fatal(err)
 	}
