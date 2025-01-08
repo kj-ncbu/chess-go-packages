@@ -69,23 +69,14 @@ func (UCINotation) Decode(pos *Position, s string) (*Move, error) {
 	if pos == nil {
 		return m, nil
 	}
-	p := pos.Board().Piece(s1)
-	if p.Type() == King {
-		if (s1 == E1 && s2 == G1) || (s1 == E8 && s2 == G8) {
-			m.addTag(KingSideCastle)
-		} else if (s1 == E1 && s2 == C1) || (s1 == E8 && s2 == C8) {
-			m.addTag(QueenSideCastle)
+	mStr := m.String()
+	for _, validMove := range pos.ValidMoves() {
+		validMoveStr := validMove.String()
+		if validMoveStr == mStr {
+			return validMove, nil // validMove has the tags which m does not
 		}
-	} else if p.Type() == Pawn && s2 == pos.enPassantSquare {
-		m.addTag(EnPassant)
-		m.addTag(Capture)
 	}
-	c1 := p.Color()
-	c2 := pos.Board().Piece(s2).Color()
-	if c2 != NoColor && c1 != c2 {
-		m.addTag(Capture)
-	}
-	return m, nil
+	return nil, fmt.Errorf("chess: could not decode UCI notation %s for position %s , move not a legal move", s, pos.String())
 }
 
 // AlgebraicNotation (or Standard Algebraic Notation) is the
