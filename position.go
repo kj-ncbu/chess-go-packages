@@ -296,6 +296,7 @@ const (
 	bitsCastleBlackQueen
 	bitsTurn
 	bitsHasEnPassant
+	bitsIsNineSixty
 )
 
 // MarshalBinary implements the encoding.BinaryMarshaler interface
@@ -312,6 +313,24 @@ func (pos *Position) MarshalBinary() (data []byte, err error) {
 		return nil, err
 	}
 	if err := binary.Write(buf, binary.BigEndian, pos.enPassantSquare); err != nil {
+		return nil, err
+	}
+	var hsideFile uint8
+	if pos.castleRights.hSideRookStartingFile == "" {
+		hsideFile = 255
+	} else {
+		hsideFile = uint8(strToSquareMap[pos.castleRights.hSideRookStartingFile+"1"].File())
+	}
+	if err := binary.Write(buf, binary.BigEndian, hsideFile); err != nil {
+		return nil, err
+	}
+	var asideFile uint8
+	if pos.castleRights.aSideRookStartingFile == "" {
+		asideFile = 255
+	} else {
+		asideFile = uint8(strToSquareMap[pos.castleRights.aSideRookStartingFile+"1"].File())
+	}
+	if err := binary.Write(buf, binary.BigEndian, asideFile); err != nil {
 		return nil, err
 	}
 	var b uint8
@@ -333,6 +352,9 @@ func (pos *Position) MarshalBinary() (data []byte, err error) {
 	if pos.enPassantSquare != NoSquare {
 		b = b | bitsHasEnPassant
 	}
+	if pos.castleRights.nineSixtyMode {
+		b = b | bitsIsNineSixty
+	}
 	if err := binary.Write(buf, binary.BigEndian, b); err != nil {
 		return nil, err
 	}
@@ -341,7 +363,7 @@ func (pos *Position) MarshalBinary() (data []byte, err error) {
 
 // UnmarshalBinary implements the encoding.BinaryMarshaler interface
 func (pos *Position) UnmarshalBinary(data []byte) error {
-	if len(data) != 101 {
+	if len(data) != 103 {
 		return errors.New("chess: position binary data should consist of 101 bytes")
 	}
 	board := &Board{}
@@ -363,32 +385,50 @@ func (pos *Position) UnmarshalBinary(data []byte) error {
 	if err := binary.Read(buf, binary.BigEndian, &pos.enPassantSquare); err != nil {
 		return err
 	}
+	pos.castleRights = &CastleRights{}
+	var hsideFile uint8
+	if err := binary.Read(buf, binary.BigEndian, &hsideFile); err != nil {
+		return err
+	}
+	if hsideFile == 255 {
+		pos.castleRights.hSideRookStartingFile = ""
+	} else {
+		pos.castleRights.hSideRookStartingFile = File(hsideFile).String()
+	}
+	var asideFile uint8
+	if err := binary.Read(buf, binary.BigEndian, &asideFile); err != nil {
+		return err
+	}
+	if asideFile == 255 {
+		pos.castleRights.aSideRookStartingFile = ""
+	} else {
+		pos.castleRights.aSideRookStartingFile = File(asideFile).String()
+	}
 	var b uint8
 	if err := binary.Read(buf, binary.BigEndian, &b); err != nil {
 		return err
 	}
-	pos.castleRights = ""
 	pos.turn = White
 	if b&bitsCastleWhiteKing != 0 {
-		pos.castleRights += "K"
+		pos.castleRights.whiteKingSideCastle = true
 	}
 	if b&bitsCastleWhiteQueen != 0 {
-		pos.castleRights += "Q"
+		pos.castleRights.whiteQueenSideCastle = true
 	}
 	if b&bitsCastleBlackKing != 0 {
-		pos.castleRights += "k"
+		pos.castleRights.blackKingSideCastle = true
 	}
 	if b&bitsCastleBlackQueen != 0 {
-		pos.castleRights += "q"
-	}
-	if pos.castleRights == "" {
-		pos.castleRights = "-"
+		pos.castleRights.blackQueenSideCastle = true
 	}
 	if b&bitsTurn != 0 {
 		pos.turn = Black
 	}
 	if b&bitsHasEnPassant == 0 {
 		pos.enPassantSquare = NoSquare
+	}
+	if b&bitsIsNineSixty != 0 {
+		pos.castleRights.nineSixtyMode = true
 	}
 	pos.inCheck = isInCheck(pos)
 	return nil
