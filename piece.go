@@ -175,7 +175,7 @@ func (p Piece) String() string {
 }
 
 var (
-	pieceUnicodes = []string{" ", "♔", "♕", "♖", "♗", "♘", "♙", "♚", "♛", "♜", "♝", "♞", "♟"}
+	pieceUnicodes = []string{" ", "♚", "♛", "♜", "♝", "♞", "♟", "♔", "♕", "♖", "♗", "♘", "♙"}
 )
 
 func (p Piece) getFENChar() string {
