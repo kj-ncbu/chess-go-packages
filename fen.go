@@ -7,8 +7,8 @@ import (
 )
 
 // Decodes FEN notation into a GameState.  An error is returned
-// if there is a parsing error.  FEN notation format:
-// rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+// if there is a parsing error or if the FEN is illegal. FEN
+// notation format: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 func decodeFEN(fen string) (*Position, error) {
 	fen = strings.TrimSpace(fen)
 	parts := strings.Split(fen, " ")
@@ -27,7 +27,7 @@ func decodeFEN(fen string) (*Position, error) {
 	if err != nil {
 		return nil, err
 	}
-	sq, err := formEnPassant(parts[3])
+	sq, err := formEnPassant(parts[3], b, turn)
 	if err != nil {
 		return nil, err
 	}
@@ -39,18 +39,32 @@ func decodeFEN(fen string) (*Position, error) {
 	if err != nil || moveCount < 1 {
 		return nil, fmt.Errorf("chess: fen invalid move count %s", parts[5])
 	}
-	return &Position{
+
+	pos := &Position{
 		board:           b,
 		turn:            turn,
 		castleRights:    rights,
 		enPassantSquare: sq,
 		halfMoveClock:   halfMoveClock,
 		moveCount:       moveCount,
-	}, nil
+	}
+
+	// Make sure the player in next turn cannot capture opponent's king.
+	cp := pos.copy()
+	cp.turn = cp.turn.Other()
+	if isInCheck(cp) {
+		return nil, fmt.Errorf("chess: fen illegal %s , king can be captured in next move", fen)
+	}
+
+	return pos, nil
 }
 
 // generates board from fen format: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR
 func fenBoard(boardStr string) (*Board, error) {
+	// make sure boardStr contains only one K and one k.
+	if strings.Count(boardStr, "K") != 1 || strings.Count(boardStr, "k") != 1 {
+		return nil, fmt.Errorf("chess: fen illegal board %s , both black and white should have one king each", boardStr)
+	}
 	rankStrs := strings.Split(boardStr, "/")
 	if len(rankStrs) != 8 {
 		return nil, fmt.Errorf("chess: fen invalid board %s", boardStr)
@@ -58,6 +72,9 @@ func fenBoard(boardStr string) (*Board, error) {
 	m := map[Square]Piece{}
 	for i, rankStr := range rankStrs {
 		rank := Rank(7 - i)
+		if (rank == Rank1 || rank == Rank8) && (strings.ContainsRune(rankStr, 'p') || strings.ContainsRune(rankStr, 'P')) {
+			return nil, fmt.Errorf("chess: fen illegal board %s , pawns cannot be on first or last rank", boardStr)
+		}
 		fileMap, err := fenFormRank(rankStr)
 		if err != nil {
 			return nil, err
@@ -111,7 +128,7 @@ func formCastleRights(castleStr string) (CastleRights, error) {
 	return CastleRights(castleStr), nil
 }
 
-func formEnPassant(enPassant string) (Square, error) {
+func formEnPassant(enPassant string, board *Board, turn Color) (Square, error) {
 	if enPassant == "-" {
 		return NoSquare, nil
 	}
@@ -119,6 +136,15 @@ func formEnPassant(enPassant string) (Square, error) {
 	if sq == NoSquare || !(sq.Rank() == Rank3 || sq.Rank() == Rank6) {
 		return NoSquare, fmt.Errorf("chess: fen invalid En Passant square %s", enPassant)
 	}
+
+	if (sq.Rank() == Rank3 && turn != Black) || (sq.Rank() == Rank6 && turn != White) {
+		return NoSquare, fmt.Errorf("chess: fen invalid En Passant square %s, not possible for given turn", enPassant)
+	}
+
+	if (sq.Rank() == Rank3 && board.Piece(NewSquare(sq.File(), Rank4)) != WhitePawn) || (sq.Rank() == Rank6 && board.Piece(NewSquare(sq.File(), Rank5)) != BlackPawn) {
+		return NoSquare, fmt.Errorf("chess: fen invalid En Passant square %s, corresponding pawn not present", enPassant)
+	}
+
 	return sq, nil
 }
 
