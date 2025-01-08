@@ -158,9 +158,21 @@ func decodePGN(pgn string) (*Game, error) {
 	}
 
 	gameFuncs := []func(*Game){}
+	is960 := false
+	for _, tp := range tagPairs {
+		if strings.ToLower(tp.Key) == "variant" {
+			if strings.ToLower(tp.Value) == "chess960" ||
+				strings.ToLower(tp.Value) == "chess 960" ||
+				strings.ToLower(tp.Value) == "fischerandom" ||
+				strings.ToLower(tp.Value) == "fischerrandom" ||
+				strings.ToLower(tp.Value) == "fischer random" {
+				is960 = true
+			}
+		}
+	}
 	for _, tp := range tagPairs {
 		if strings.ToLower(tp.Key) == "fen" {
-			fenFunc, err := FEN(tp.Value)
+			fenFunc, err := FEN(tp.Value, is960)
 			if err != nil {
 				return nil, fmt.Errorf("chess: pgn decode error %s on tag %s", err.Error(), tp.Key)
 			}
