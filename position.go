@@ -20,25 +20,76 @@ const (
 )
 
 // CastleRights holds the state of both sides castling abilities.
-type CastleRights string
+// One or both of a/h side rook starting files could be empty in the case where initial x-fen/shredder-fen was
+// not from starting position making that info unavailable. If both are empty, there is no diff btw 960 and normal
+// game and 960 being enabled or not is mere formality for record keeping / proper PGN generation.
+type CastleRights struct {
+	nineSixtyMode         bool
+	aSideRookStartingFile string
+	hSideRookStartingFile string
+	whiteKingSideCastle   bool
+	whiteQueenSideCastle  bool
+	blackKingSideCastle   bool
+	blackQueenSideCastle  bool
+}
+
 
 // CanCastle returns true if the given color and side combination
 // can castle, otherwise returns false.
-func (cr CastleRights) CanCastle(c Color, side Side) bool {
-	char := "k"
-	if side == QueenSide {
-		char = "q"
-	}
+func (cr *CastleRights) CanCastle(c Color, side Side) bool {
 	if c == White {
-		char = strings.ToUpper(char)
+		if side == KingSide {
+			return cr.whiteKingSideCastle
+		} else if side == QueenSide {
+			return cr.whiteQueenSideCastle
+		}
+	} else if c == Black {
+		if side == KingSide {
+			return cr.blackKingSideCastle
+		} else if side == QueenSide {
+			return cr.blackQueenSideCastle
+		}
 	}
-	return strings.Contains(string(cr), char)
+	return false
 }
 
 // String implements the fmt.Stringer interface and returns
-// a FEN compatible string.  Ex. KQq
-func (cr CastleRights) String() string {
-	return string(cr)
+// a FEN compatible string for normal match (Ex. KQq) or
+// a Shredder-FEN compatible string for 960 match (Ex. FBfb)
+func (cr *CastleRights) String() string {
+	rights := ""
+	if cr.nineSixtyMode {
+		if cr.whiteKingSideCastle {
+			rights = rights + strings.ToUpper(cr.hSideRookStartingFile)
+		}
+		if cr.whiteQueenSideCastle {
+			rights = rights + strings.ToUpper(cr.aSideRookStartingFile)
+		}
+		if cr.blackKingSideCastle {
+			rights = rights + strings.ToLower(cr.hSideRookStartingFile)
+		}
+		if cr.blackQueenSideCastle {
+			rights = rights + strings.ToLower(cr.aSideRookStartingFile)
+		}
+	} else {
+		if cr.whiteKingSideCastle {
+			rights = "K"
+		}
+		if cr.whiteQueenSideCastle {
+			rights = rights + "Q"
+		}
+		if cr.blackKingSideCastle {
+			rights = rights + "k"
+		}
+		if cr.blackQueenSideCastle {
+			rights = rights + "q"
+		}
+	}
+	if rights == "" {
+		return "-"
+	} else {
+		return rights
+	}
 }
 
 // Position represents the state of the game without reguard
@@ -46,7 +97,7 @@ func (cr CastleRights) String() string {
 type Position struct {
 	board           *Board
 	turn            Color
-	castleRights    CastleRights
+	castleRights    *CastleRights
 	enPassantSquare Square
 	halfMoveClock   int
 	moveCount       int
@@ -130,13 +181,14 @@ func (pos *Position) EnPassantSquare() Square {
 	return pos.enPassantSquare
 }
 
-// CastleRights returns the castling rights of the position.
-func (pos *Position) CastleRights() CastleRights {
-	return pos.castleRights
-}
+// // CastleRights returns the castling rights of the position.
+// func (pos *Position) CastleRights() CastleRights {
+// 	return pos.castleRights
+// }
 
 // String implements the fmt.Stringer interface and returns a
 // string with the FEN format: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+// For 960 games it returns Shredder-FEN
 func (pos *Position) String() string {
 	b := pos.board.String()
 	t := pos.turn.String()
@@ -335,25 +387,46 @@ func (pos *Position) copy() *Position {
 	}
 }
 
-func (pos *Position) updateCastleRights(m *Move) CastleRights {
-	cr := string(pos.castleRights)
-	p := pos.board.Piece(m.s1)
-	if p == WhiteKing || m.s1 == H1 || m.s2 == H1 {
-		cr = strings.Replace(cr, "K", "", -1)
+func (pos *Position) updateCastleRights(m *Move) *CastleRights {
+
+	newcr := pos.castleRights.copy()
+
+	movedPiece := pos.board.Piece(m.s1)
+
+	var whiteRookKingSideSquare Square = NoSquare
+	var whiteRookQueenSideSquare Square = NoSquare
+	var blackRookKingSideSquare Square = NoSquare
+	var blackRookQueenSideSquare Square = NoSquare
+
+	if newcr.nineSixtyMode {
+		if newcr.hSideRookStartingFile != "" {
+			whiteRookKingSideSquare = strToSquareMap[strings.ToLower(newcr.hSideRookStartingFile)+"1"]
+			blackRookKingSideSquare = strToSquareMap[strings.ToLower(newcr.hSideRookStartingFile)+"8"]
+		}
+		if newcr.aSideRookStartingFile != "" {
+			whiteRookQueenSideSquare = strToSquareMap[strings.ToLower(newcr.aSideRookStartingFile)+"1"]
+			blackRookQueenSideSquare = strToSquareMap[strings.ToLower(newcr.aSideRookStartingFile)+"8"]
+		}
+	} else {
+		whiteRookKingSideSquare = H1
+		blackRookKingSideSquare = H8
+		whiteRookQueenSideSquare = A1
+		blackRookQueenSideSquare = A8
 	}
-	if p == WhiteKing || m.s1 == A1 || m.s2 == A1 {
-		cr = strings.Replace(cr, "Q", "", -1)
+
+	if movedPiece == WhiteKing || m.s1 == whiteRookKingSideSquare || m.s2 == whiteRookKingSideSquare {
+		newcr.whiteKingSideCastle = false
 	}
-	if p == BlackKing || m.s1 == H8 || m.s2 == H8 {
-		cr = strings.Replace(cr, "k", "", -1)
+	if movedPiece == WhiteKing || m.s1 == whiteRookQueenSideSquare || m.s2 == whiteRookQueenSideSquare {
+		newcr.whiteQueenSideCastle = false
 	}
-	if p == BlackKing || m.s1 == A8 || m.s2 == A8 {
-		cr = strings.Replace(cr, "q", "", -1)
+	if movedPiece == BlackKing || m.s1 == blackRookKingSideSquare || m.s2 == blackRookKingSideSquare {
+		newcr.blackKingSideCastle = false
 	}
-	if cr == "" {
-		cr = "-"
+	if movedPiece == BlackKing || m.s1 == blackRookQueenSideSquare || m.s2 == blackRookQueenSideSquare {
+		newcr.blackQueenSideCastle = false
 	}
-	return CastleRights(cr)
+	return newcr
 }
 
 func (pos *Position) updateEnPassantSquare(m *Move) Square {
