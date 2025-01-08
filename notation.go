@@ -133,6 +133,9 @@ func algebraicNotationParts(s string) (string, string, string, string, string, s
 }
 
 func (AlgebraicNotation) Decode(pos *Position, s string) (*Move, error) {
+	if pos == nil {
+		return nil, fmt.Errorf("chess: can not decode algebraic notation %s for position = nil", s)
+	}
 	s = sanitizeNotationString(s)
 	for _, m := range pos.ValidMoves() {
 		for _, v := range notationVariants(s) {
@@ -181,6 +184,9 @@ func (LongAlgebraicNotation) Encode(pos *Position, m *Move) string {
 
 // Decode implements the Decoder interface.
 func (LongAlgebraicNotation) Decode(pos *Position, s string) (*Move, error) {
+	if pos == nil {
+		return nil, fmt.Errorf("chess: can not decode long algebraic notation %s for position = nil", s)
+	}
 	s = sanitizeNotationString(s)
 	for _, m := range pos.ValidMoves() {
 		for _, v := range notationVariants(s) {
