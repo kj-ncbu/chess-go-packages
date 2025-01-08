@@ -47,23 +47,22 @@ func (UCINotation) Encode(pos *Position, m *Move) string {
 // Decode implements the Decoder interface.
 func (UCINotation) Decode(pos *Position, s string) (*Move, error) {
 	l := len(s)
-	err := fmt.Errorf(`chess: failed to decode long algebraic notation text "%s" for position %s`, s, pos)
 	if l < 4 || l > 5 {
-		return nil, err
+		return nil, fmt.Errorf(`chess: failed to decode UCI notation text "%s" , length should be 4 or 5`, s)
 	}
 	s1, ok := strToSquareMap[s[0:2]]
 	if !ok {
-		return nil, err
+		return nil, fmt.Errorf(`chess: failed to decode UCI notation text "%s" , source square invalid`, s)
 	}
 	s2, ok := strToSquareMap[s[2:4]]
 	if !ok {
-		return nil, err
+		return nil, fmt.Errorf(`chess: failed to decode UCI notation text "%s" , destination square invalid`, s)
 	}
 	promo := NoPieceType
 	if l == 5 {
 		promo = pieceTypeFromChar(s[4:5])
 		if promo == NoPieceType {
-			return nil, err
+			return nil, fmt.Errorf(`chess: failed to decode UCI notation text "%s" , invalid promotion piece`, s)
 		}
 	}
 	m := &Move{s1: s1, s2: s2, promo: promo}
