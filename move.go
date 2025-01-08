@@ -17,6 +17,8 @@ const (
 	// inCheck indicates that the move puts the moving player in check and
 	// is therefore invalid.
 	inCheck
+	// indicates that the move is a castle in a 960 position
+	NineSixtyCastle
 )
 
 // A Move is the movement of a piece from one square to another.

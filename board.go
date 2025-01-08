@@ -222,6 +222,43 @@ func (b *Board) update(m *Move) {
 	s1BB := bbForSquare(m.s1)
 	s2BB := bbForSquare(m.s2)
 
+	if m.HasTag(NineSixtyCastle) {
+		if p1.Color() == White {
+			// remove white piece (king) at m.s1
+			b.bbWhiteKing = b.bbWhiteKing & ^s1BB
+			// remove white piece (rook) at m.s2
+			b.bbWhiteRook = b.bbWhiteRook & ^s2BB
+		} else if p1.Color() == Black {
+			// remove black piece (king) at m.s1
+			b.bbBlackKing = b.bbBlackKing & ^s1BB
+			// remove black piece (rook) at m.s2
+			b.bbBlackRook = b.bbBlackRook & ^s2BB
+		}
+		if p1.Color() == White && m.HasTag(KingSideCastle) {
+			// add king to g1
+			b.bbWhiteKing = b.bbWhiteKing | bbForSquare(G1)
+			// add rook to f1
+			b.bbWhiteRook = b.bbWhiteRook | bbForSquare(F1)
+		} else if p1.Color() == White && m.HasTag(QueenSideCastle) {
+			// add king to c1
+			b.bbWhiteKing = b.bbWhiteKing | bbForSquare(C1)
+			// add rook to d1
+			b.bbWhiteRook = b.bbWhiteRook | bbForSquare(D1)
+		} else if p1.Color() == Black && m.HasTag(KingSideCastle) {
+			// add king to g8
+			b.bbBlackKing = b.bbBlackKing | bbForSquare(G8)
+			// add rook to f8
+			b.bbBlackRook = b.bbBlackRook | bbForSquare(F8)
+		} else if p1.Color() == Black && m.HasTag(QueenSideCastle) {
+			// add king to c8
+			b.bbBlackKing = b.bbBlackKing | bbForSquare(C8)
+			// add rook to d8
+			b.bbBlackRook = b.bbBlackRook | bbForSquare(D8)
+		}
+		b.calcConvienceBBs(m)
+		return
+	}
+
 	// move s1 piece to s2
 	for _, p := range allPieces {
 		bb := b.bbForPiece(p)
@@ -271,7 +308,7 @@ func (b *Board) calcConvienceBBs(m *Move) {
 	b.whiteSqs = whiteSqs
 	b.blackSqs = blackSqs
 	b.emptySqs = emptySqs
-	if m == nil {
+	if m == nil || m.HasTag(NineSixtyCastle) {
 		b.whiteKingSq = NoSquare
 		b.blackKingSq = NoSquare
 
