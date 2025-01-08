@@ -161,6 +161,9 @@ func (g *Game) Move(m *Move) error {
 	if valid == nil {
 		return fmt.Errorf("chess: invalid move %s", m)
 	}
+	// at this point there is a difference btw 'valid' and 'm'.
+	// 'valid' also has important tags which are not present in m.
+	// Those tags are necessary to properly update position.
 	g.moves = append(g.moves, valid)
 	g.pos = g.pos.Update(valid)
 	g.positions = append(g.positions, g.pos)
