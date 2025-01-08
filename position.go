@@ -216,7 +216,52 @@ func (pos *Position) String() string {
 func (pos *Position) XFENString() string {
 	b := pos.board.String()
 	t := pos.turn.String()
-	c := pos.castleRights.String()
+	cr := pos.castleRights
+	c := ""
+	if cr.nineSixtyMode {
+		if cr.whiteKingSideCastle {
+			toAdd := "K"
+			for sq := strToSquareMap[cr.hSideRookStartingFile+"1"] + 1; sq <= H1; sq++ {
+				if pos.board.Piece(sq) == WhiteRook {
+					toAdd = strings.ToUpper(cr.hSideRookStartingFile)
+					break
+				}
+			}
+			c = c + toAdd
+		}
+		if cr.whiteQueenSideCastle {
+			toAdd := "Q"
+			for sq := strToSquareMap[cr.aSideRookStartingFile+"1"] - 1; sq >= A1; sq-- {
+				if pos.board.Piece(sq) == WhiteRook {
+					toAdd = strings.ToUpper(cr.aSideRookStartingFile)
+					break
+				}
+			}
+			c = c + toAdd
+		}
+		if cr.blackKingSideCastle {
+			toAdd := "k"
+			for sq := strToSquareMap[cr.hSideRookStartingFile+"8"] + 1; sq <= H8; sq++ {
+				if pos.board.Piece(sq) == BlackRook {
+					toAdd = strings.ToLower(cr.hSideRookStartingFile)
+					break
+				}
+			}
+			c = c + toAdd
+		}
+		if cr.blackQueenSideCastle {
+			toAdd := "q"
+			for sq := strToSquareMap[cr.aSideRookStartingFile+"8"] - 1; sq >= A8; sq-- {
+				if pos.board.Piece(sq) == BlackRook {
+					toAdd = strings.ToLower(cr.aSideRookStartingFile)
+					break
+				}
+			}
+			c = c + toAdd
+		}
+	} else {
+		c = cr.String()
+	}
 	sq := "-"
 	if pos.enPassantSquare != NoSquare {
 		// Check if there is a pawn in a position to capture en passant
