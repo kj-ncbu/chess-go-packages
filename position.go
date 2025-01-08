@@ -33,6 +33,17 @@ type CastleRights struct {
 	blackQueenSideCastle  bool
 }
 
+func (cr *CastleRights) copy() *CastleRights {
+	return &CastleRights{
+		nineSixtyMode:         cr.nineSixtyMode,
+		aSideRookStartingFile: cr.aSideRookStartingFile,
+		hSideRookStartingFile: cr.hSideRookStartingFile,
+		whiteKingSideCastle:   cr.whiteKingSideCastle,
+		whiteQueenSideCastle:  cr.whiteQueenSideCastle,
+		blackKingSideCastle:   cr.blackKingSideCastle,
+		blackQueenSideCastle:  cr.blackQueenSideCastle,
+	}
+}
 
 // CanCastle returns true if the given color and side combination
 // can castle, otherwise returns false.
@@ -379,7 +390,7 @@ func (pos *Position) copy() *Position {
 	return &Position{
 		board:           pos.board.copy(),
 		turn:            pos.turn,
-		castleRights:    pos.castleRights,
+		castleRights:    pos.castleRights.copy(),
 		enPassantSquare: pos.enPassantSquare,
 		halfMoveClock:   pos.halfMoveClock,
 		moveCount:       pos.moveCount,
