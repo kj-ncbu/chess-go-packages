@@ -1,5 +1,7 @@
 package chess
 
+import "strings"
+
 type engine struct{}
 
 func (engine) CalcMoves(pos *Position, first bool) []*Move {
@@ -205,42 +207,88 @@ func castleMoves(pos *Position) []*Move {
 	moves := []*Move{}
 	kingSide := pos.castleRights.CanCastle(pos.Turn(), KingSide)
 	queenSide := pos.castleRights.CanCastle(pos.Turn(), QueenSide)
+
+	// 960 castle rules
+	// 1 - No square from the king's initial square to its final square may be under attack by an enemy piece, even
+	// if the king is already on its final square.
+	// 2 - All the squares between the king's initial and final squares (including the final square), and all the
+	// squares between the castling rook's initial and final squares (including the final square), must be vacant
+	// except for the king and castling rook.
+
+	var krFile, qrFile string
+	if pos.castleRights.nineSixtyMode {
+		// one or both of these could be "", but in that case they are not used in below code
+		krFile = strings.ToLower(pos.castleRights.hSideRookStartingFile)
+		qrFile = strings.ToLower(pos.castleRights.aSideRookStartingFile)
+	} else {
+		krFile = "h"
+		qrFile = "a"
+	}
+
 	// white king side
 	if pos.turn == White && kingSide &&
-		(^pos.board.emptySqs&(bbForSquare(F1)|bbForSquare(G1))) == 0 &&
-		!squaresAreAttacked(pos, F1, G1) &&
-		!pos.inCheck {
-		m := &Move{s1: E1, s2: G1}
+		((^pos.board.emptySqs & (bbForSquares(squareRange(pos.board.whiteKingSq, G1)...) |
+			bbForSquares(squareRange(strToSquareMap[krFile+"1"], F1)...))) ==
+			bbForSquares(pos.board.whiteKingSq, strToSquareMap[krFile+"1"])) &&
+		!squaresAreAttacked(pos, squareRange(pos.board.whiteKingSq, G1)...) {
+		var m *Move
+		if pos.castleRights.nineSixtyMode {
+			m = &Move{s1: pos.board.whiteKingSq, s2: strToSquareMap[krFile+"1"]}
+			m.addTag(NineSixtyCastle)
+		} else {
+			m = &Move{s1: E1, s2: G1}
+		}
 		m.addTag(KingSideCastle)
 		addTags(m, pos)
 		moves = append(moves, m)
 	}
 	// white queen side
 	if pos.turn == White && queenSide &&
-		(^pos.board.emptySqs&(bbForSquare(B1)|bbForSquare(C1)|bbForSquare(D1))) == 0 &&
-		!squaresAreAttacked(pos, C1, D1) &&
-		!pos.inCheck {
-		m := &Move{s1: E1, s2: C1}
+		((^pos.board.emptySqs & (bbForSquares(squareRange(pos.board.whiteKingSq, C1)...) |
+			bbForSquares(squareRange(strToSquareMap[qrFile+"1"], D1)...))) ==
+			bbForSquares(pos.board.whiteKingSq, strToSquareMap[qrFile+"1"])) &&
+		!squaresAreAttacked(pos, squareRange(pos.board.whiteKingSq, C1)...) {
+		var m *Move
+		if pos.castleRights.nineSixtyMode {
+			m = &Move{s1: pos.board.whiteKingSq, s2: strToSquareMap[qrFile+"1"]}
+			m.addTag(NineSixtyCastle)
+		} else {
+			m = &Move{s1: E1, s2: C1}
+		}
 		m.addTag(QueenSideCastle)
 		addTags(m, pos)
 		moves = append(moves, m)
 	}
 	// black king side
 	if pos.turn == Black && kingSide &&
-		(^pos.board.emptySqs&(bbForSquare(F8)|bbForSquare(G8))) == 0 &&
-		!squaresAreAttacked(pos, F8, G8) &&
-		!pos.inCheck {
-		m := &Move{s1: E8, s2: G8}
+		((^pos.board.emptySqs & (bbForSquares(squareRange(pos.board.blackKingSq, G8)...) |
+			bbForSquares(squareRange(strToSquareMap[krFile+"8"], F8)...))) ==
+			bbForSquares(pos.board.blackKingSq, strToSquareMap[krFile+"8"])) &&
+		!squaresAreAttacked(pos, squareRange(pos.board.blackKingSq, G8)...) {
+		var m *Move
+		if pos.castleRights.nineSixtyMode {
+			m = &Move{s1: pos.board.blackKingSq, s2: strToSquareMap[krFile+"8"]}
+			m.addTag(NineSixtyCastle)
+		} else {
+			m = &Move{s1: E8, s2: G8}
+		}
 		m.addTag(KingSideCastle)
 		addTags(m, pos)
 		moves = append(moves, m)
 	}
 	// black queen side
 	if pos.turn == Black && queenSide &&
-		(^pos.board.emptySqs&(bbForSquare(B8)|bbForSquare(C8)|bbForSquare(D8))) == 0 &&
-		!squaresAreAttacked(pos, C8, D8) &&
-		!pos.inCheck {
-		m := &Move{s1: E8, s2: C8}
+		((^pos.board.emptySqs & (bbForSquares(squareRange(pos.board.blackKingSq, C8)...) |
+			bbForSquares(squareRange(strToSquareMap[qrFile+"8"], D8)...))) ==
+			bbForSquares(pos.board.blackKingSq, strToSquareMap[qrFile+"8"])) &&
+		!squaresAreAttacked(pos, squareRange(pos.board.blackKingSq, C8)...) {
+		var m *Move
+		if pos.castleRights.nineSixtyMode {
+			m = &Move{s1: pos.board.blackKingSq, s2: strToSquareMap[qrFile+"8"]}
+			m.addTag(NineSixtyCastle)
+		} else {
+			m = &Move{s1: E8, s2: C8}
+		}
 		m.addTag(QueenSideCastle)
 		addTags(m, pos)
 		moves = append(moves, m)
@@ -311,6 +359,31 @@ const (
 // TODO make method on Square
 func bbForSquare(sq Square) bitboard {
 	return bbSquares[sq]
+}
+
+// returns bitboard with 1 only on squares in the list
+func bbForSquares(sqs ...Square) bitboard {
+	var bb bitboard = 0
+	for _, sq := range sqs {
+		bb = bb | bbForSquare(sq)
+	}
+	return bb
+}
+
+// returns a slice of squares from range start to end, inclusive.
+// order of range is A1, A2... H7, H8
+func squareRange(start, end Square) []Square {
+	if start < 0 || start > 63 || end < 0 || end > 63 {
+		return []Square{} // Return empty slice if end is less than start
+	}
+	if end < start {
+		start, end = end, start
+	}
+	s := make([]Square, end-start+1)
+	for i := range s {
+		s[i] = start + Square(i)
+	}
+	return s
 }
 
 var (
