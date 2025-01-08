@@ -193,6 +193,7 @@ var (
 func unsafeFEN(s string) *Position {
 	pos, err := decodeFEN(s, false)
 	if err != nil {
+		log.Printf("move_test.go: unsafeFEN(): error for fen %s\n", s)
 		log.Fatal(err)
 	}
 	return pos
