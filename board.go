@@ -153,10 +153,12 @@ func (b *Board) String() string {
 
 // Piece returns the piece for the given square.
 func (b *Board) Piece(sq Square) Piece {
-	for _, p := range allPieces {
-		bb := b.bbForPiece(p)
-		if bb.Occupied(sq) {
-			return p
+	if b.isOccupied(sq) {
+		for _, p := range allPieces {
+			bb := b.bbForPiece(p)
+			if bb.Occupied(sq) {
+				return p
+			}
 		}
 	}
 	return NoPiece
