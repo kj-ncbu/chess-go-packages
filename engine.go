@@ -334,7 +334,7 @@ var (
 )
 
 func init() {
-	for sq := 0; sq < 64; sq++ {
+	for sq := 0; sq < numOfSquaresInBoard; sq++ {
 		bbSquares[sq] = bitboard(uint64(1) << (uint8(63) - uint8(sq)))
 	}
 }
